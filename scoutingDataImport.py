@@ -3,7 +3,7 @@ import pandas as pd
 import statbotics
 
 HEADERS = {
-    'X-TBA-Auth-Key': "xgGoJmaz1XxRLpMGBF7AU16RBi1Lk48UpkLE2jMbSE0pyyTzBwyQYt1qwhc7xSk5"
+    'X-TBA-Auth-Key': ""
 }
 
 

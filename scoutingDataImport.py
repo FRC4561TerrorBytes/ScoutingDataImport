@@ -6,10 +6,12 @@ HEADERS = {
     'X-TBA-Auth-Key': ""
 }
 
+eventKey = "2024nccmp"
 
-def getComponentOPRs(numTeams, eventKey):
-    #API Call just to get component OPR data
-    url = "https://www.thebluealliance.com/api/v3/event/"+eventKey+"/coprs"
+
+def getTBATeamEvent(numTeams, eventKey, eventData):
+    #API Call just to get team event data, works for OPR and component OPR, could also work on ranking
+    url = "https://www.thebluealliance.com/api/v3/event/"+eventKey+"/"+eventData
     data = requests.get(url, headers=HEADERS).json()
     df = pd.json_normalize(data).transpose()
 
@@ -41,8 +43,26 @@ def getComponentOPRs(numTeams, eventKey):
     
     return df2
 
-# def getStatboticsData(eventKey):
+def getStatboticsData(teamList, eventKey):
 
+    # Create statbotics API object
+    sb = statbotics.Statbotics()
 
+    # Iterate through each team and pull data for a given event
+    listOfTeams = []
+    for team in teamList :
+        listOfTeams.append(sb.get_team_event(int(team[3:]), eventKey))
 
-# coprs = getComponentOPRs(40, "2024nccmp")
+    # Create dataframe from a list of dicts
+    df = pd.DataFrame.from_records(listOfTeams, index=teamList)
+    df.drop(columns=['team', 'year', 'event','offseason', 'event_name', 'state', 'country', 'district', 'type', 'week', 'status', 'num_teams' ], inplace=True) #Remove unneeded data
+    return df
+    
+
+coprs = getTBATeamEvent(40, eventKey, "coprs")
+oprs = getTBATeamEvent(40, eventKey, "oprs")
+
+teamList = list(coprs.index.values)
+epas = getStatboticsData(teamList, eventKey)
+
+print(pd.concat([coprs,oprs,epas], axis=1))

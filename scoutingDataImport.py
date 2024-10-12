@@ -3,10 +3,23 @@ import pandas as pd
 import statbotics
 
 HEADERS = {
-    'X-TBA-Auth-Key': ""
+    'X-TBA-Auth-Key': "xgGoJmaz1XxRLpMGBF7AU16RBi1Lk48UpkLE2jMbSE0pyyTzBwyQYt1qwhc7xSk5"
 }
 
-eventKey = "2024nccmp"
+
+# gSheetAPIKey = "AIzaSyDUK48jMpr0KcJYiy8U-bI1Q0NZDa1MYSg"
+# sheetID = "1ALwEwxlfVpOaDqcByMtsRlJOcqARDud4bCfM0cDZL-E"
+# sheetName = "Sheet1"
+# outputSheetURL = "https://sheets.googleapis.com/v4/spreadsheets/"+sheetID+"/values/"+sheetName+"!A1:Z?alt=json&key="+gSheetAPIKey
+# print(outputSheetURL)
+
+# Get the number of teams at an event, helpful for cleaning up the TBA API import. 
+def getNumTeams(eventKey):
+    # Retrieve rankings data
+    url = "https://www.thebluealliance.com/api/v3/event/"+eventKey+"/rankings"
+    data = requests.get(url, headers=HEADERS).json()
+
+    return len(data['rankings']) #Return number of teams that competed in matches, avoids teams that just presented at DCMPs
 
 
 def getTBATeamEvent(numTeams, eventKey, eventData):
@@ -57,12 +70,17 @@ def getStatboticsData(teamList, eventKey):
     df = pd.DataFrame.from_records(listOfTeams, index=teamList)
     df.drop(columns=['team', 'year', 'event','offseason', 'event_name', 'state', 'country', 'district', 'type', 'week', 'status', 'num_teams' ], inplace=True) #Remove unneeded data
     return df
-    
 
-coprs = getTBATeamEvent(40, eventKey, "coprs")
-oprs = getTBATeamEvent(40, eventKey, "oprs")
+#Designed to run in Neptyne google sheets editor, google cloud API seems kind of annoying and poorly documented
+def runMe(eventKey):
 
-teamList = list(coprs.index.values)
-epas = getStatboticsData(teamList, eventKey)
+    numTeams = getNumTeams(eventKey)
+    coprs = getTBATeamEvent(numTeams, eventKey, "coprs")
+    oprs = getTBATeamEvent(numTeams, eventKey, "oprs")
 
-print(pd.concat([coprs,oprs,epas], axis=1))
+    teamList = list(coprs.index.values)
+    epas = getStatboticsData(teamList, eventKey)
+
+    fullData = pd.concat([coprs,oprs,epas], axis=1)
+    fullData.index.name = 'Team'
+    A1 = fullData

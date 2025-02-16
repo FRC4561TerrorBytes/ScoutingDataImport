@@ -1,6 +1,8 @@
+import ast
 import requests
 import pandas as pd
 import statbotics
+import openpyxl
 
 HEADERS = {
     'X-TBA-Auth-Key': "xgGoJmaz1XxRLpMGBF7AU16RBi1Lk48UpkLE2jMbSE0pyyTzBwyQYt1qwhc7xSk5"
@@ -21,10 +23,9 @@ def getNumTeams(eventKey):
 
     return len(data['rankings']) #Return number of teams that competed in matches, avoids teams that just presented at DCMPs
 
-
 def getTBATeamEvent(numTeams, eventKey, eventData):
     #API Call just to get team event data, works for OPR and component OPR, could also work on ranking
-    url = "https://www.thebluealliance.com/api/v3/event/"+eventKey+"/"+eventData
+    url = "https://www.thebluealliance.com/api/v3/event/"+eventKey+"/"+ eventData
     data = requests.get(url, headers=HEADERS).json()
     df = pd.json_normalize(data).transpose()
 
@@ -68,8 +69,32 @@ def getStatboticsData(teamList, eventKey):
 
     # Create dataframe from a list of dicts
     df = pd.DataFrame.from_records(listOfTeams, index=teamList)
-    df.drop(columns=['team', 'year', 'event','offseason', 'event_name', 'state', 'country', 'district', 'type', 'week', 'status', 'num_teams' ], inplace=True) #Remove unneeded data
-    return df
+    df.drop(columns=['team', 'year', 'event', 'event_name', 'state', 'country', 'district', 'type', 'week', 'status', 'time','first_event' ], inplace=True) #Remove unneeded data
+    
+    epa_flat = df['epa'].apply(flatten_record)
+    record_flat = df['record'].apply(flatten_record)
+    
+    epa_df = pd.DataFrame(epa_flat.tolist(), index=df.index)
+    record_df = pd.DataFrame(record_flat.tolist(), index=df.index)
+
+    df_expanded = pd.concat([df.drop(columns=['epa', 'record']), epa_df.add_prefix("epa_"), record_df], axis=1)
+    df_expanded.drop(columns=['qual_num_teams','epa_unitless','elim_wins','elim_losses','elim_ties','elim_count','elim_winrate'
+                              ,'elim_alliance',	'elim_is_captain',	'total_wins'
+                              ,'total_losses',	'total_ties', 'total_count', 'total_winrate'], inplace=True)
+    return df_expanded
+
+def flatten_record(record_dict):
+    if isinstance(record_dict, str):
+        record_dict = ast.literal_eval(record_dict)  # Convert string representation to dictionary
+    record_flat = {}
+    for key, value in record_dict.items():
+        if isinstance(value, dict):
+            for sub_key, sub_value in value.items():
+                record_flat[f"{key}_{sub_key}"] = sub_value
+        else:
+            record_flat[key] = value
+    return record_flat
+    
 
 #Designed to run in Neptyne google sheets editor, google cloud API seems kind of annoying and poorly documented
 def runMe(eventKey):
@@ -81,6 +106,9 @@ def runMe(eventKey):
     teamList = list(coprs.index.values)
     epas = getStatboticsData(teamList, eventKey)
 
-    fullData = pd.concat([coprs,oprs,epas], axis=1)
+    fullData = pd.concat([coprs,oprs, epas], axis=1)
     fullData.index.name = 'Team'
-    A1 = fullData
+    fullData.to_excel('Data.xlsx', sheet_name='WeekZeroData', index=True)
+    #A1 = fullData
+
+    

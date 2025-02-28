@@ -1,3 +1,4 @@
+import argparse
 import ast
 import requests
 import pandas as pd
@@ -20,7 +21,7 @@ def getNumTeams(eventKey):
     # Retrieve rankings data
     url = "https://www.thebluealliance.com/api/v3/event/"+eventKey+"/rankings"
     data = requests.get(url, headers=HEADERS).json()
-
+    print(data)
     return len(data['rankings']) #Return number of teams that competed in matches, avoids teams that just presented at DCMPs
 
 def getTBATeamEvent(numTeams, eventKey, eventData):
@@ -111,4 +112,15 @@ def runMe(eventKey):
     fullData.to_excel('Data.xlsx', sheet_name='WeekZeroData', index=True)
     #A1 = fullData
 
+def main():
+    parser = argparse.ArgumentParser(description="Process an event key.")
+    parser.add_argument('-e', '--eventKey', required=True)
     
+    args = parser.parse_args()
+    
+    print(f"Received event key: {args.eventKey}")
+
+    runMe(args.eventKey)
+
+if __name__ == "__main__":
+    main()

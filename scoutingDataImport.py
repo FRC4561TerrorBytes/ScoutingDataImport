@@ -9,23 +9,22 @@ HEADERS = {
     'X-TBA-Auth-Key': "xgGoJmaz1XxRLpMGBF7AU16RBi1Lk48UpkLE2jMbSE0pyyTzBwyQYt1qwhc7xSk5"
 }
 
-
-# gSheetAPIKey = "AIzaSyDUK48jMpr0KcJYiy8U-bI1Q0NZDa1MYSg"
-# sheetID = "1ALwEwxlfVpOaDqcByMtsRlJOcqARDud4bCfM0cDZL-E"
-# sheetName = "Sheet1"
-# outputSheetURL = "https://sheets.googleapis.com/v4/spreadsheets/"+sheetID+"/values/"+sheetName+"!A1:Z?alt=json&key="+gSheetAPIKey
-# print(outputSheetURL)
+def getEventData(eventKey):
+    url = "https://www.thebluealliance.com/api/v3/event/" + eventKey +"/simple"
+    data = requests.get(url, headers=HEADERS).json()
+    print('Gathering data for: ' + str(data['year']) + " " + data['name'] + "\n")
+    
+    return str(data['year']) + data['name']
 
 # Get the number of teams at an event, helpful for cleaning up the TBA API import. 
 def getNumTeams(eventKey):
     # Retrieve rankings data
     url = "https://www.thebluealliance.com/api/v3/event/"+eventKey+"/rankings"
     data = requests.get(url, headers=HEADERS).json()
-    print(data)
     return len(data['rankings']) #Return number of teams that competed in matches, avoids teams that just presented at DCMPs
 
 def getTBATeamEvent(numTeams, eventKey, eventData):
-    #API Call just to get team event data, works for OPR and component OPR, could also work on ranking
+    #API Call just to get team event data, works for OPR and component OPR
     url = "https://www.thebluealliance.com/api/v3/event/"+eventKey+"/"+ eventData
     data = requests.get(url, headers=HEADERS).json()
     df = pd.json_normalize(data).transpose()
@@ -79,11 +78,15 @@ def getStatboticsData(teamList, eventKey):
     record_df = pd.DataFrame(record_flat.tolist(), index=df.index)
 
     df_expanded = pd.concat([df.drop(columns=['epa', 'record']), epa_df.add_prefix("epa_"), record_df], axis=1)
+
+    #Get rid of more statbotics data we don't care about. 
     df_expanded.drop(columns=['qual_num_teams','epa_unitless','elim_wins','elim_losses','elim_ties','elim_count','elim_winrate'
                               ,'elim_alliance',	'elim_is_captain',	'total_wins'
-                              ,'total_losses',	'total_ties', 'total_count', 'total_winrate'], inplace=True)
+                              ,'total_losses',	'total_ties', 'total_count', 'total_winrate', 'district_points','epa_total_points_mean', 'epa_total_points_sd',
+                              'epa_norm', 'epa_conf'], inplace=True)
     return df_expanded
 
+#Some of the statbotics data is returned as nested dicts, this flattens them 
 def flatten_record(record_dict):
     if isinstance(record_dict, str):
         record_dict = ast.literal_eval(record_dict)  # Convert string representation to dictionary
@@ -99,7 +102,7 @@ def flatten_record(record_dict):
 
 #Designed to run in Neptyne google sheets editor, google cloud API seems kind of annoying and poorly documented
 def runMe(eventKey):
-
+    workbookName = getEventData(eventKey)
     numTeams = getNumTeams(eventKey)
     coprs = getTBATeamEvent(numTeams, eventKey, "coprs")
     oprs = getTBATeamEvent(numTeams, eventKey, "oprs")
@@ -107,20 +110,22 @@ def runMe(eventKey):
     teamList = list(coprs.index.values)
     epas = getStatboticsData(teamList, eventKey)
 
-    fullData = pd.concat([coprs,oprs, epas], axis=1)
-    fullData.index.name = 'Team'
-    fullData.to_excel('Data.xlsx', sheet_name='WeekZeroData', index=True)
-    #A1 = fullData
+    #Write OPR, COPR, EPA data to different sheets, this takes longer but is more human readable
+    with pd.ExcelWriter(workbookName + '.xlsx') as writer: 
+        oprs.to_excel(writer, sheet_name='OPRs', index=True)
+        coprs.to_excel(writer, sheet_name='Component OPRs', index=True)
+        epas.to_excel(writer, sheet_name='EPA', index=True)
+
+    print("Finished gathering data, view data in the Data.xlsx file")
 
 def main():
     parser = argparse.ArgumentParser(description="Process an event key.")
-    parser.add_argument('-e', '--eventKey', required=True)
+    parser.add_argument('eventKey')
     
     args = parser.parse_args()
     
-    print(f"Received event key: {args.eventKey}")
-
-    runMe(args.eventKey)
+    #API endpoints for eventkey are case sensitive
+    runMe(args.eventKey.lower())
 
 if __name__ == "__main__":
     main()

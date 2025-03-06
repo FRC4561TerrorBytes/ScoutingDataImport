@@ -3,7 +3,6 @@ import ast
 import requests
 import pandas as pd
 import statbotics
-import openpyxl
 
 HEADERS = {
     'X-TBA-Auth-Key': "xgGoJmaz1XxRLpMGBF7AU16RBi1Lk48UpkLE2jMbSE0pyyTzBwyQYt1qwhc7xSk5"
@@ -22,6 +21,31 @@ def getNumTeams(eventKey):
     url = "https://www.thebluealliance.com/api/v3/event/"+eventKey+"/rankings"
     data = requests.get(url, headers=HEADERS).json()
     return len(data['rankings']) #Return number of teams that competed in matches, avoids teams that just presented at DCMPs
+
+def getRankings(eventKey):
+    url = "https://www.thebluealliance.com/api/v3/event/" + eventKey +"/rankings"
+    data = requests.get(url, headers=HEADERS).json()
+    data = data['rankings']
+
+    df = pd.json_normalize(data)
+
+    # Expand 'sort_orders' list into separate columns
+    sort_orders_df = df['sort_orders'].apply(pd.Series)
+    sort_orders_df.columns = [f'sort_order_{i+1}' for i in range(len(sort_orders_df.columns))]
+    
+    # Merge expanded columns back into main DataFrame and drop the original 'sort_orders' column
+    df = df.drop(columns=['sort_orders']).join(sort_orders_df)
+
+    df.set_index('team_key', inplace=True)
+
+    df_reorder = df.loc[:,['sort_order_1', 'sort_order_2', 'sort_order_3', 'sort_order_4', 'sort_order_5', 'sort_order_6', 'record.wins', 'record.losses', 'record.ties', 'dq', 'matches_played', 'extra_stats']]
+    df_reorder['extra_stats'] = df_reorder['extra_stats'].explode()
+    df_reorder = df_reorder.rename(columns={'extra_stats': 'Ranking Points', 'sort_order_1' : 'Ranking score',
+                                            'sort_order_2': 'Avg Coop', 'sort_order_3': 'Average match points', 'sort_order_4': 'Average Auto points', 
+                                            'sort_order_5': 'Average Barge points'})
+
+    df_reorder = df_reorder.drop(columns=['sort_order_6'])
+    return df_reorder
 
 def getTBATeamEvent(numTeams, eventKey, eventData):
     #API Call just to get team event data, works for OPR and component OPR
@@ -98,25 +122,33 @@ def flatten_record(record_dict):
         else:
             record_flat[key] = value
     return record_flat
-    
 
-#Designed to run in Neptyne google sheets editor, google cloud API seems kind of annoying and poorly documented
+#Only runs locally for now, google cloud api credential process is confusing
 def runMe(eventKey):
     workbookName = getEventData(eventKey)
     numTeams = getNumTeams(eventKey)
     coprs = getTBATeamEvent(numTeams, eventKey, "coprs")
     oprs = getTBATeamEvent(numTeams, eventKey, "oprs")
+    rankings = getRankings(eventKey)
 
     teamList = list(coprs.index.values)
     epas = getStatboticsData(teamList, eventKey)
 
+
+    #Add team names to columns from TBA data for ease of viewing
+    coprs.insert(0, 'team_name', epas['team_name'])
+    oprs.insert(0, 'team_name', epas['team_name'])
+    rankings.insert(0, 'team_name', epas['team_name'])
+
+
     #Write OPR, COPR, EPA data to different sheets, this takes longer but is more human readable
-    with pd.ExcelWriter(workbookName + '.xlsx') as writer: 
+    with pd.ExcelWriter(workbookName.replace(" ", "") + '.xlsx') as writer: 
         oprs.to_excel(writer, sheet_name='OPRs', index=True)
         coprs.to_excel(writer, sheet_name='Component OPRs', index=True)
         epas.to_excel(writer, sheet_name='EPA', index=True)
+        rankings.to_excel(writer, sheet_name='Rankings', index=True)
 
-    print("Finished gathering data, view data in the Data.xlsx file")
+    print("Finished gathering data, view data in the " + workbookName.replace(" ", "") + ".xlsx file")
 
 def main():
     parser = argparse.ArgumentParser(description="Process an event key.")

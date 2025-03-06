@@ -40,9 +40,9 @@ def getRankings(eventKey):
 
     df_reorder = df.loc[:,['sort_order_1', 'sort_order_2', 'sort_order_3', 'sort_order_4', 'sort_order_5', 'sort_order_6', 'record.wins', 'record.losses', 'record.ties', 'dq', 'matches_played', 'extra_stats']]
     df_reorder['extra_stats'] = df_reorder['extra_stats'].explode()
-    df_reorder = df_reorder.rename(columns={'extra_stats': 'Ranking Points', 'sort_order_1' : 'Ranking score',
+    df_reorder = df_reorder.rename(columns={'extra_stats': 'Ranking Points', 'sort_order_1' : 'Ranking score', 'matches_played' : 'Matches Played',
                                             'sort_order_2': 'Avg Coop', 'sort_order_3': 'Average match points', 'sort_order_4': 'Average Auto points', 
-                                            'sort_order_5': 'Average Barge points'})
+                                            'sort_order_5': 'Average Barge points', 'record.wins' : 'Wins', 'record.ties': 'Ties', 'record.losses' : 'Losses'})
 
     df_reorder = df_reorder.drop(columns=['sort_order_6'])
     return df_reorder
@@ -79,6 +79,9 @@ def getTBATeamEvent(numTeams, eventKey, eventData):
         currentcol = currentcol[col].round(3)
         df2[col] = currentcol
     
+    #Clean up column names
+    df2.columns = df2.columns.str.replace(r"([A-Z])", r" \1" , regex=True).str.strip().str.title()
+
     return df2
 
 def getStatboticsData(teamList, eventKey):
@@ -108,6 +111,11 @@ def getStatboticsData(teamList, eventKey):
                               ,'elim_alliance',	'elim_is_captain',	'total_wins'
                               ,'total_losses',	'total_ties', 'total_count', 'total_winrate', 'district_points','epa_total_points_mean', 'epa_total_points_sd',
                               'epa_norm', 'epa_conf'], inplace=True)
+    
+    #Get rid of underscores in column names, make column names have uppercase first letters
+    df_expanded.columns = df_expanded.columns.str.replace("[_]", " ", regex=True)
+    df_expanded.columns = df_expanded.columns.str.title()
+
     return df_expanded
 
 #Some of the statbotics data is returned as nested dicts, this flattens them 
@@ -136,9 +144,9 @@ def runMe(eventKey):
 
 
     #Add team names to columns from TBA data for ease of viewing
-    coprs.insert(0, 'team_name', epas['team_name'])
-    oprs.insert(0, 'team_name', epas['team_name'])
-    rankings.insert(0, 'team_name', epas['team_name'])
+    coprs.insert(0, 'Team Name', epas['Team Name'])
+    oprs.insert(0, 'Team Name', epas['Team Name'])
+    rankings.insert(0, 'Team Name', epas['Team Name'])
 
 
     #Write OPR, COPR, EPA data to different sheets, this takes longer but is more human readable

@@ -1,4 +1,4 @@
-pandas
+pandas==2.2.3
 statbotics==3.0
-openpyxl
-requests
+openpyxl==3.1.5
+requests==2.32.3

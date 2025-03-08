@@ -1,0 +1,4 @@
+pandas
+statbotics==3.0
+openpyxl
+requests
